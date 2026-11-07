@@ -53,6 +53,8 @@ open class Window: TreeNode, Hashable {
     func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }
 
     @MainActor func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, duration: Int = 0, slideIn: WorkspaceSlide? = nil) { die("Not implemented") }
+    @MainActor var isFrameAnimationInProgress: Bool { false }
+    @MainActor func cancelFrameAnimation() {}
 }
 
 enum MacosWindowNativeState: Sendable {

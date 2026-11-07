@@ -37,6 +37,7 @@ extension TreeNode {
                     window.layoutFloatingWindow(context, windowRect)
                 }
             case .window(let window):
+                let isFullscreenTransition = window.consumePendingFullscreenTransition()
                 if window.windowId != currentlyManipulatedWithMouseWindowId {
                     lastAppliedLayoutVirtualRect = virtual
                     if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
@@ -45,7 +46,11 @@ extension TreeNode {
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
                         window.isFullscreen = false
-                        let duration = window.consumePendingFullscreenTransition() ? context.fullscreenDurationMs : context.resizeDurationMs
+                        let duration = tilingFrameDurationMs(
+                            isFullscreenTransition: isFullscreenTransition,
+                            resizeDurationMs: context.resizeDurationMs,
+                            fullscreenDurationMs: context.fullscreenDurationMs,
+                        )
                         window.setAxFrame(point, CGSize(width: width, height: height), duration: duration, slideIn: context.slideIn)
                     }
                 }
@@ -86,9 +91,9 @@ private struct LayoutContext {
 extension Window {
     @MainActor
     fileprivate func layoutFloatingWindow(_ context: LayoutContext, _ windowRect: Rect?) {
+        _ = consumePendingFullscreenTransition()
         let workspace = context.workspace
         let currentMonitor = windowRect?.center.monitorApproximation
-        let isFrameAnimationInProgress = (self as? MacWindow).map { $0.macApp.isAnimating($0.windowId) } == true
         if !isFrameAnimationInProgress, let currentMonitor, let windowRect, workspace != currentMonitor.visibleWorkspace {
             let windowTopLeftCorner = windowRect.topLeftCorner
             let xProportion = (windowTopLeftCorner.x - currentMonitor.visibleRect.topLeftX) / currentMonitor.visibleRect.width
@@ -116,7 +121,6 @@ extension Window {
         let monitorRect = noOuterGapsInFullscreen
             ? context.workspace.workspaceMonitorInfo.visibleRect
             : context.workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
-        _ = consumePendingFullscreenTransition()
         setAxFrame(
             monitorRect.topLeftCorner,
             CGSize(width: monitorRect.width, height: monitorRect.height),

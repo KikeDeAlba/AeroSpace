@@ -153,6 +153,7 @@ enum OptimalHideCorner {
 @MainActor
 private func layoutWorkspaces() async throws {
     if !TrayMenuModel.shared.isEnabled {
+        resetWorkspaceSlideTracking()
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
             try await workspace.layoutWorkspace() // Unhide tiling windows from corner
@@ -185,7 +186,7 @@ private func layoutWorkspaces() async throws {
         monitorToOptimalHideCorner[monitor.rect.topLeftCorner] = corner
     }
 
-    let slides = takeWorkspaceSlides(monitors)
+    let (slides, laidOutVisibleWorkspaces) = detectWorkspaceSlides(monitors)
 
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
@@ -201,32 +202,37 @@ private func layoutWorkspaces() async throws {
             try await (window as! MacWindow).hideInCorner(corner, slideOut: slideOut) // todo as!
         }
     }
+    lastLaidOutVisibleWorkspaces = laidOutVisibleWorkspaces
 }
 
 @MainActor
 private var lastLaidOutVisibleWorkspaces: [CGPoint: String] = [:]
 
 @MainActor
-private func takeWorkspaceSlides(_ monitors: [MonitorInfo]) -> WorkspaceSlides {
+func resetWorkspaceSlideTracking() {
+    lastLaidOutVisibleWorkspaces = [:]
+}
+
+@MainActor
+private func detectWorkspaceSlides(_ monitors: [MonitorInfo]) -> (WorkspaceSlides, [CGPoint: String]) {
     var current: [CGPoint: Workspace] = [:]
     var monitorRects: [CGPoint: Rect] = [:]
     for monitor in monitors {
         current[monitor.rect.topLeftCorner] = monitor.visibleWorkspace
         monitorRects[monitor.rect.topLeftCorner] = monitor.rect
     }
-    let previous = lastLaidOutVisibleWorkspaces
-    lastLaidOutVisibleWorkspaces = current.mapValues(\.name)
     var existingWorkspaces: [String: Workspace] = [:]
     for workspace in Workspace.all {
         existingWorkspaces[workspace.name] = workspace
     }
-    return detectWorkspaceSlides(
-        previous: previous,
+    let slides = detectWorkspaceSlides(
+        previous: lastLaidOutVisibleWorkspaces,
         current: current,
         monitorRects: monitorRects,
         existingWorkspaces: existingWorkspaces,
         durationMs: config.animations.workspaceSlideDurationMs,
     )
+    return (slides, current.mapValues(\.name))
 }
 
 @MainActor
