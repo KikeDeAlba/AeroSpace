@@ -7,6 +7,7 @@ open class Window: TreeNode, Hashable {
     var lastFloatingSize: CGSize?
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
+    var pendingFullscreenTransition: Bool = false
     var layoutReason: LayoutReason = .standard
     var lifeStatus: WindowLifeStatus = .alive
 
@@ -86,4 +87,11 @@ extension Window {
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }
+
+    @MainActor
+    func consumePendingFullscreenTransition() -> Bool {
+        let result = pendingFullscreenTransition
+        pendingFullscreenTransition = false
+        return result
+    }
 }

@@ -45,7 +45,8 @@ extension TreeNode {
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
                         window.isFullscreen = false
-                        window.setAxFrame(point, CGSize(width: width, height: height))
+                        let duration = window.consumePendingFullscreenTransition() ? context.fullscreenDurationMs : context.resizeDurationMs
+                        window.setAxFrame(point, CGSize(width: width, height: height), duration: duration)
                     }
                 }
             case .tilingContainer(let container):
@@ -67,11 +68,16 @@ extension TreeNode {
 private struct LayoutContext {
     let workspace: Workspace
     let resolvedGaps: ResolvedGaps
+    let resizeDurationMs: Int
+    let fullscreenDurationMs: Int
 
     @MainActor
     init(_ workspace: Workspace) {
         self.workspace = workspace
         self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitorInfo)
+        let isMouseManipulationInProgress = currentlyManipulatedWithMouseWindowId != nil
+        self.resizeDurationMs = isMouseManipulationInProgress ? 0 : config.animations.resizeDurationMs
+        self.fullscreenDurationMs = isMouseManipulationInProgress ? 0 : config.animations.fullscreenDurationMs
     }
 }
 
@@ -107,7 +113,8 @@ extension Window {
         let monitorRect = noOuterGapsInFullscreen
             ? context.workspace.workspaceMonitorInfo.visibleRect
             : context.workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
-        setAxFrame(monitorRect.topLeftCorner, CGSize(width: monitorRect.width, height: monitorRect.height))
+        _ = consumePendingFullscreenTransition()
+        setAxFrame(monitorRect.topLeftCorner, CGSize(width: monitorRect.width, height: monitorRect.height), duration: context.fullscreenDurationMs)
     }
 }
 
