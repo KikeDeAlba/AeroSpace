@@ -52,6 +52,7 @@ struct ReloadConfigResult {
         TrayMenuModel.shared.lastReloadConfigContainedWarnings = containsWarnings
         resetHotKeys()
         config = parseResult.config
+        TrayMenuModel.shared.showSponsorMenuItem = config.showSponsorMenuItem
         configUrl = result.configUrl
         await activateMode_nonCancellable(activeMode)
         syncStartAtLogin()

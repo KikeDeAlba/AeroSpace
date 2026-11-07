@@ -46,6 +46,10 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # Also see: https://nikitabobko.github.io/AeroSpace/goodies#disable-hide-app
 automatically-unhide-macos-hidden-apps = false
 
+# Show the "Sponsor AeroSpace on GitHub" item in the menu bar menu
+# Set to false to hide it
+show-sponsor-menu-item = true
+
 # List of workspaces that should stay alive even when they contain no windows,
 # even when they are invisible.
 # This config option is only available since 'config-version = 2'

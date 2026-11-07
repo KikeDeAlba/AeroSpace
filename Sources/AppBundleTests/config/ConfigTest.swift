@@ -30,6 +30,28 @@ struct ConfigTest {
         assertEquals(result.warnings, [])
     }
 
+    @Test func testShowSponsorMenuItem() {
+        assertEquals(parseConfig("").config.showSponsorMenuItem, true)
+        let result = parseConfig(
+            """
+            config-version = 2
+            show-sponsor-menu-item = false
+            """,
+        )
+        assertEquals(result.errors, [])
+        assertEquals(result.config.showSponsorMenuItem, false)
+    }
+
+    @Test func testShowSponsorMenuItemWrongType() {
+        let result = parseConfig(
+            """
+            config-version = 2
+            show-sponsor-menu-item = "no"
+            """,
+        )
+        assertEquals(result.strErrors, ["[ERROR] show-sponsor-menu-item: Expected type is \'Bool\'. But actual type is \'String\'"])
+    }
+
     @Test func testConfigVersionOutOfBounds() {
         let result = parseConfig(
             """

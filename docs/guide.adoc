@@ -254,6 +254,19 @@ after-startup-command = [
 ]
 ----
 
+[#show-sponsor-menu-item]
+=== show-sponsor-menu-item
+
+By default, the menu bar menu contains a "Sponsor AeroSpace on GitHub" item.
+You can hide it with:
+
+[source,toml]
+----
+show-sponsor-menu-item = false
+----
+
+Omitting `show-sponsor-menu-item` is equivalent to `show-sponsor-menu-item = true`.
+
 [#exec-env-vars]
 === exec-* Environment Variables
 

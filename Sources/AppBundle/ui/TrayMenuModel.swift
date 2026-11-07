@@ -14,6 +14,7 @@ public final class TrayMenuModel: ObservableObject {
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
     @Published var sponsorshipMessage: String = sponsorshipPrompts.randomElement().orDie()
     @Published var lastReloadConfigContainedWarnings: Bool = false
+    @Published var showSponsorMenuItem: Bool = true
     @Published var axPermissionStatus: AxPermissionStatus = .waitingWithPrompt
 }
 
