@@ -30,6 +30,18 @@ struct ConfigTest {
         assertEquals(result.warnings, [])
     }
 
+    @Test func testShowSponsorMenuItem() {
+        assertEquals(parseConfig("").config.showSponsorMenuItem, true)
+        let result = parseConfig(
+            """
+            config-version = 2
+            show-sponsor-menu-item = false
+            """,
+        )
+        assertEquals(result.errors, [])
+        assertEquals(result.config.showSponsorMenuItem, false)
+    }
+
     @Test func testConfigVersionOutOfBounds() {
         let result = parseConfig(
             """
