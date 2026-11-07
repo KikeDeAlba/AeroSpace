@@ -118,7 +118,7 @@ final class MacApp: AbstractApp {
 
     func closeAndUnregisterAxWindow(_ windowId: OpaqueWindowId) {
         if serverArgs.isReadOnly { return }
-        forgetFrameRequest(windowId)
+        cancelFrameAnimation(windowId)
         guard let nativeWindowId = windowIdMapping.forward[windowId] else { return }
         _ = withWindowAsync(windowId, .cancellable) { [windows] window, job in
             guard let closeButton = window.get(Ax.closeButtonAttr) else { return }
@@ -206,8 +206,7 @@ final class MacApp: AbstractApp {
                         return
                     }
                     var from = current
-                    if let startTopLeft = animation.startTopLeft {
-                        let start = FrameTarget(topLeft: startTopLeft, size: size)
+                    if let start = animationStartPlacement(startTopLeft: animation.startTopLeft, size: size, wasInterrupted: wasInterrupted) {
                         try disableAnimations(app: app, job) {
                             try setFrame(window, start.topLeft, start.size, job)
                         }
@@ -243,7 +242,7 @@ final class MacApp: AbstractApp {
         isAnimating(windowId) ? frameRequests[windowId]?.target.topLeft : nil
     }
 
-    private func forgetFrameRequest(_ windowId: OpaqueWindowId) {
+    func cancelFrameAnimation(_ windowId: OpaqueWindowId) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         frameRequests.removeValue(forKey: windowId)
     }
@@ -251,7 +250,8 @@ final class MacApp: AbstractApp {
     func setAxFrameForTermination(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         let semaphore = DispatchSemaphore(value: 0)
-        let job = withWindowAsync(windowId, .nonCancellable) { [axApp] window, job in
+        let job = withWindowAsync(windowId, .nonCancellable) { [axApp, frameAnimator] window, job in
+            frameAnimator.threadGuarded.stopAll(app: axApp.threadGuarded)
             try? disableAnimations(app: axApp.threadGuarded, job) {
                 try setFrame(window, topLeft, size, job)
             }
@@ -305,14 +305,14 @@ final class MacApp: AbstractApp {
     }
 
     func setNativeFullscreen(_ windowId: OpaqueWindowId, _ value: Bool) {
-        forgetFrameRequest(windowId)
+        cancelFrameAnimation(windowId)
         setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { window, job in
             window.set(Ax.isFullscreenAttr, value)
         }
     }
 
     func setNativeMinimized(_ windowId: OpaqueWindowId, _ value: Bool) {
-        forgetFrameRequest(windowId)
+        cancelFrameAnimation(windowId)
         setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { window, job in
             window.set(Ax.minimizedAttr, value)
         }
@@ -444,7 +444,7 @@ final class MacApp: AbstractApp {
         }
         for windowId in Set(setFrameJobs.keys).union(frameRequests.keys) {
             if !aliveOrInvisibleMap.keys.contains(windowId) {
-                forgetFrameRequest(windowId)
+                cancelFrameAnimation(windowId)
             }
         }
         return aliveOrInvisibleMap

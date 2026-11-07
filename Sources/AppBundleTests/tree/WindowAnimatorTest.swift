@@ -35,15 +35,35 @@ struct WindowAnimatorTest {
         }
     }
 
-    @Test func testStepCount() {
-        assertEquals(animationStepCount(durationMs: 0), 0)
-        assertEquals(animationStepCount(durationMs: -5), 0)
-        assertEquals(animationStepCount(durationMs: 1), 1)
-        assertEquals(animationStepCount(durationMs: 16), 1)
-        assertEquals(animationStepCount(durationMs: 17), 2)
-        assertEquals(animationStepCount(durationMs: 150), 10)
-        assertEquals(animationStepCount(durationMs: 250), 16)
-        assertEquals(animationStepCount(durationMs: 1000), 63)
+    @Test func testTimeBasedProgress() {
+        assertEquals(animationProgress(elapsedNs: 0, durationMs: 200), 0)
+        assertEquals(animationProgress(elapsedNs: 50_000_000, durationMs: 200), 0.25)
+        assertEquals(animationProgress(elapsedNs: 100_000_000, durationMs: 200), 0.5)
+        assertEquals(animationProgress(elapsedNs: 200_000_000, durationMs: 200), 1)
+        assertEquals(animationProgress(elapsedNs: 900_000_000, durationMs: 200), 1)
+        assertEquals(animationProgress(elapsedNs: 0, durationMs: 0), 1)
+    }
+
+    @Test func testSlowStepsSkipFramesInsteadOfStretching() {
+        let from = Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100)
+        let to = Rect(topLeftX: 400, topLeftY: 0, width: 100, height: 100)
+        let lateTick = animationProgress(elapsedNs: 150_000_000, durationMs: 150)
+        assertEquals(animationFrame(from: from, to: to, progress: lateTick, easing: .linear), to)
+        let halfway = animationProgress(elapsedNs: 75_000_000, durationMs: 150)
+        assertEquals(animationFrame(from: from, to: to, progress: halfway, easing: .linear), Rect(topLeftX: 200, topLeftY: 0, width: 100, height: 100))
+    }
+
+    @Test func testStartPlacementIsSkippedWhenInterrupted() {
+        let start = CGPoint(x: 1500, y: 20)
+        let size = CGSize(width: 300, height: 200)
+        assertEquals(animationStartPlacement(startTopLeft: start, size: size, wasInterrupted: false), FrameTarget(topLeft: start, size: size))
+        assertNil(animationStartPlacement(startTopLeft: start, size: size, wasInterrupted: true))
+        assertNil(animationStartPlacement(startTopLeft: nil, size: size, wasInterrupted: false))
+    }
+
+    @Test func testTilingFrameDuration() {
+        assertEquals(tilingFrameDurationMs(isFullscreenTransition: true, resizeDurationMs: 150, fullscreenDurationMs: 200), 200)
+        assertEquals(tilingFrameDurationMs(isFullscreenTransition: false, resizeDurationMs: 150, fullscreenDurationMs: 200), 150)
     }
 
     @Test func testInterpolationEndpointsAreExact() {
@@ -61,13 +81,12 @@ struct WindowAnimatorTest {
         assertEquals(interpolateFrame(from: from, to: to, progress: 0.5), Rect(topLeftX: 50, topLeftY: 25, width: 200, height: 300))
     }
 
-    @Test func testLastAnimationStepIsExactTarget() {
+    @Test func testFinalProgressIsExactTarget() {
         let from = Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100)
         let to = Rect(topLeftX: 333.333, topLeftY: 77.7, width: 123.4, height: 567.8)
-        let stepCount = animationStepCount(durationMs: 150)
         for easing in Easing.allCases {
-            assertEquals(animationFrame(from: from, to: to, step: stepCount, stepCount: stepCount, easing: easing), to)
-            assertEquals(animationFrame(from: from, to: to, step: 0, stepCount: stepCount, easing: easing), from)
+            assertEquals(animationFrame(from: from, to: to, progress: 1, easing: easing), to)
+            assertEquals(animationFrame(from: from, to: to, progress: 0, easing: easing), from)
         }
     }
 

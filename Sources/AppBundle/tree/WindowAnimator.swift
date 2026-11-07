@@ -38,8 +38,9 @@ extension Easing {
     }
 }
 
-func animationStepCount(durationMs: Int) -> Int {
-    durationMs <= 0 ? 0 : max(1, (durationMs + animationFrameIntervalMs - 1) / animationFrameIntervalMs)
+func animationProgress(elapsedNs: UInt64, durationMs: Int) -> Double {
+    if durationMs <= 0 { return 1 }
+    return min(Double(elapsedNs) / (Double(durationMs) * 1_000_000), 1)
 }
 
 func interpolateFrame(from: Rect, to: Rect, progress: Double) -> Rect {
@@ -54,10 +55,17 @@ func interpolateFrame(from: Rect, to: Rect, progress: Double) -> Rect {
     )
 }
 
-func animationFrame(from: Rect, to: Rect, step: Int, stepCount: Int, easing: Easing) -> Rect {
-    step >= stepCount
-        ? to
-        : interpolateFrame(from: from, to: to, progress: easing.apply(Double(step) / Double(stepCount)))
+func animationFrame(from: Rect, to: Rect, progress: Double, easing: Easing) -> Rect {
+    progress >= 1 ? to : interpolateFrame(from: from, to: to, progress: easing.apply(progress))
+}
+
+func animationStartPlacement(startTopLeft: CGPoint?, size: CGSize?, wasInterrupted: Bool) -> FrameTarget? {
+    guard let startTopLeft, !wasInterrupted else { return nil }
+    return FrameTarget(topLeft: startTopLeft, size: size)
+}
+
+func tilingFrameDurationMs(isFullscreenTransition: Bool, resizeDurationMs: Int, fullscreenDurationMs: Int) -> Int {
+    isFullscreenTransition ? fullscreenDurationMs : resizeDurationMs
 }
 
 enum SetFrameDecision: Equatable {
@@ -93,11 +101,11 @@ private final class RunningFrameAnimation {
     let to: Rect
     let target: FrameTarget
     let finalTarget: FrameTarget?
-    let stepCount: Int
+    let durationMs: Int
     let easing: Easing
     let job: RunLoopJob
     let completion: AnimationCompletion
-    var step = 0
+    let startNs: UInt64 = DispatchTime.now().uptimeNanoseconds
     var timer: Timer? = nil
 
     init(
@@ -114,7 +122,7 @@ private final class RunningFrameAnimation {
         self.to = target.resolve(against: from)
         self.target = target
         self.finalTarget = finalTarget
-        self.stepCount = animationStepCount(durationMs: animation.durationMs)
+        self.durationMs = animation.durationMs
         self.easing = animation.easing
         self.job = job
         self.completion = completion
@@ -144,6 +152,12 @@ final class AxFrameAnimator {
         animation.completion.markDone()
         releaseDisabledAnimations(app)
         return true
+    }
+
+    func stopAll(app: AXUIElement) {
+        for id in running.keys {
+            stop(id, app: app)
+        }
     }
 
     func prune(keeping alive: Set<UInt32>, app: AXUIElement) {
@@ -189,12 +203,11 @@ final class AxFrameAnimator {
             stop(nativeWindowId, app: app)
             return
         }
-        animation.step += 1
-        let frame = animationFrame(from: animation.from, to: animation.to, step: animation.step, stepCount: animation.stepCount, easing: animation.easing)
         let stepStart = DispatchTime.now().uptimeNanoseconds
-        send(nativeWindowId, animation, frame)
+        let progress = animationProgress(elapsedNs: stepStart - animation.startNs, durationMs: animation.durationMs)
+        send(nativeWindowId, animation, animationFrame(from: animation.from, to: animation.to, progress: progress, easing: animation.easing))
         let stepMs = Int((DispatchTime.now().uptimeNanoseconds - stepStart) / 1_000_000)
-        if animation.step >= animation.stepCount {
+        if progress >= 1 {
             complete(nativeWindowId, animation, app: app)
         } else if stepMs > animationSlowStepThresholdMs {
             send(nativeWindowId, animation, animation.to)
