@@ -19,8 +19,10 @@ struct FrameTarget: Equatable, Sendable {
 }
 
 struct FrameAnimation: Equatable, Sendable {
-    let durationMs: Int
-    let easing: Easing
+    var durationMs: Int
+    var easing: Easing
+    var startTopLeft: CGPoint? = nil
+    var slideOut: WorkspaceSlide? = nil
 
     static let instant = FrameAnimation(durationMs: 0, easing: .linear)
 }
@@ -90,6 +92,7 @@ private final class RunningFrameAnimation {
     let from: Rect
     let to: Rect
     let target: FrameTarget
+    let finalTarget: FrameTarget?
     let stepCount: Int
     let easing: Easing
     let job: RunLoopJob
@@ -97,11 +100,20 @@ private final class RunningFrameAnimation {
     var step = 0
     var timer: Timer? = nil
 
-    init(window: AXUIElement, from: Rect, target: FrameTarget, animation: FrameAnimation, job: RunLoopJob, completion: AnimationCompletion) {
+    init(
+        window: AXUIElement,
+        from: Rect,
+        target: FrameTarget,
+        finalTarget: FrameTarget?,
+        animation: FrameAnimation,
+        job: RunLoopJob,
+        completion: AnimationCompletion,
+    ) {
         self.window = window
         self.from = from
         self.to = target.resolve(against: from)
         self.target = target
+        self.finalTarget = finalTarget
         self.stepCount = animationStepCount(durationMs: animation.durationMs)
         self.easing = animation.easing
         self.job = job
@@ -147,13 +159,23 @@ final class AxFrameAnimator {
         app: AXUIElement,
         from: Rect,
         target: FrameTarget,
+        finalTarget: FrameTarget?,
         animation: FrameAnimation,
         job: RunLoopJob,
         completion: AnimationCompletion,
         makeTimer: () -> Timer,
     ) {
         stop(nativeWindowId, app: app)
-        let running = RunningFrameAnimation(window: window, from: from, target: target, animation: animation, job: job, completion: completion)
+        let running = RunningFrameAnimation(
+            window: window,
+            from: from,
+            target: target,
+            finalTarget: finalTarget,
+            animation: animation,
+            job: job,
+            completion: completion,
+        )
+        lastSentFrames[nativeWindowId] = from
         holdDisabledAnimations(app)
         self.running[nativeWindowId] = running
         let timer = makeTimer()
@@ -173,11 +195,19 @@ final class AxFrameAnimator {
         send(nativeWindowId, animation, frame)
         let stepMs = Int((DispatchTime.now().uptimeNanoseconds - stepStart) / 1_000_000)
         if animation.step >= animation.stepCount {
-            stop(nativeWindowId, app: app)
+            complete(nativeWindowId, animation, app: app)
         } else if stepMs > animationSlowStepThresholdMs {
             send(nativeWindowId, animation, animation.to)
-            stop(nativeWindowId, app: app)
+            complete(nativeWindowId, animation, app: app)
         }
+    }
+
+    private func complete(_ nativeWindowId: UInt32, _ animation: RunningFrameAnimation, app: AXUIElement) {
+        if let finalTarget = animation.finalTarget {
+            try? setFrame(animation.window, finalTarget.topLeft, finalTarget.size, animation.job)
+            recordSent(nativeWindowId, finalTarget)
+        }
+        stop(nativeWindowId, app: app)
     }
 
     private func send(_ nativeWindowId: UInt32, _ animation: RunningFrameAnimation, _ frame: Rect) {

@@ -185,18 +185,48 @@ private func layoutWorkspaces() async throws {
         monitorToOptimalHideCorner[monitor.rect.topLeftCorner] = corner
     }
 
+    let slides = takeWorkspaceSlides(monitors)
+
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
         let workspace = monitor.visibleWorkspace
-        workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
-        try await workspace.layoutWorkspace()
+        let slideIn = slides.incoming[workspace]
+        workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner(slideIn: slideIn) } // todo as!
+        try await workspace.layoutWorkspace(slideIn: slideIn)
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitorInfo.rect.topLeftCorner] ?? .bottomRightCorner
+        let slideOut = slides.outgoing[workspace]
         for window in workspace.allLeafWindowsRecursive {
-            try await (window as! MacWindow).hideInCorner(corner) // todo as!
+            try await (window as! MacWindow).hideInCorner(corner, slideOut: slideOut) // todo as!
         }
     }
+}
+
+@MainActor
+private var lastLaidOutVisibleWorkspaces: [CGPoint: String] = [:]
+
+@MainActor
+private func takeWorkspaceSlides(_ monitors: [MonitorInfo]) -> WorkspaceSlides {
+    var current: [CGPoint: Workspace] = [:]
+    var monitorRects: [CGPoint: Rect] = [:]
+    for monitor in monitors {
+        current[monitor.rect.topLeftCorner] = monitor.visibleWorkspace
+        monitorRects[monitor.rect.topLeftCorner] = monitor.rect
+    }
+    let previous = lastLaidOutVisibleWorkspaces
+    lastLaidOutVisibleWorkspaces = current.mapValues(\.name)
+    var existingWorkspaces: [String: Workspace] = [:]
+    for workspace in Workspace.all {
+        existingWorkspaces[workspace.name] = workspace
+    }
+    return detectWorkspaceSlides(
+        previous: previous,
+        current: current,
+        monitorRects: monitorRects,
+        existingWorkspaces: existingWorkspaces,
+        durationMs: config.animations.workspaceSlideDurationMs,
+    )
 }
 
 @MainActor
