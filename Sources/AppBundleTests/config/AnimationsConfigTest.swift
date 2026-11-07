@@ -128,4 +128,33 @@ struct AnimationsConfigTest {
         assertEquals(result.strErrors, ["[ERROR] animations.bounce-duration-ms: Unknown key"])
         assertEquals(result.config.animations.resizeDurationMs, 100)
     }
+
+    @Test func testDefaultConfigFileParsesAnimationsBlock() {
+        let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/default-config.toml"), encoding: .utf8)
+        assertTrue(toml.contains("[animations]"))
+        let result = parseConfig(toml)
+        assertEquals(result.errors, [])
+        assertEquals(result.config.animations, AnimationsConfig())
+    }
+
+    @Test func testEmptyAnimationsTable() {
+        let result = parseConfig(
+            """
+            [animations]
+            """,
+        )
+        assertEquals(result.strErrors, ["[ERROR] animations: empty table is not allowed here"])
+        assertEquals(result.config.animations, AnimationsConfig())
+    }
+
+    @Test func testLongIntegerOverflowIsRejected() {
+        let result = parseConfig(
+            """
+            [animations]
+                resize-duration-ms = 9999999999
+            """,
+        )
+        assertEquals(result.errors.count, 1)
+        assertEquals(result.config.animations.resizeDurationMs, 0)
+    }
 }
